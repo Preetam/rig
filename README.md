@@ -1,4 +1,4 @@
-![image](https://user-images.githubusercontent.com/379404/28253258-ae3ce346-6a6f-11e7-8200-4fe60f305e12.png)
+![The rig](https://user-images.githubusercontent.com/379404/28292002-37f75ab6-6b1b-11e7-9a66-c7ee9711e8f4.png)
 
 ---
 
