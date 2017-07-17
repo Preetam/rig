@@ -2,6 +2,6 @@
 
 ---
 
-[![CircleCI](https://circleci.com/gh/Preetam/rig.svg?style=svg)](https://circleci.com/gh/Preetam/rig) 
+[![CircleCI](https://circleci.com/gh/Preetam/rig.svg?style=svg)](https://circleci.com/gh/Preetam/rig) [![GoDoc](https://godoc.org/github.com/Preetam/rig?status.svg)](https://godoc.org/github.com/Preetam/rig)
 
 Go framework for building stateful, replicated services
