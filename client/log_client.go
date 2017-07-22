@@ -48,7 +48,7 @@ func (c *LogClient) Prepared() (LogPayload, error) {
 				return payload, lm2log.ErrNotFound
 			}
 		}
-		return payload, err
+		return payload, resp
 	}
 	return payload, nil
 }
@@ -65,7 +65,7 @@ func (c *LogClient) Committed() (LogPayload, error) {
 				return payload, lm2log.ErrNotFound
 			}
 		}
-		return payload, err
+		return payload, resp
 	}
 	return payload, nil
 }

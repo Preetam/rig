@@ -33,8 +33,12 @@ type RequestData struct {
 }
 
 type APIResponse struct {
-	Data  interface{} `json:"data,omitempty"`
-	Error string      `json:"error,omitempty"`
+	Data interface{} `json:"data,omitempty"`
+	Err  string      `json:"error,omitempty"`
+}
+
+func (r APIResponse) Error() string {
+	return r.Err
 }
 
 func RequestIdentifier(c siesta.Context, w http.ResponseWriter, r *http.Request) {
@@ -54,9 +58,9 @@ func ResponseGenerator(c siesta.Context, w http.ResponseWriter, r *http.Request)
 		response.Data = data
 	}
 
-	response.Error = requestData.ResponseError
+	response.Err = requestData.ResponseError
 
-	if response.Data != nil || response.Error != "" {
+	if response.Data != nil || response.Err != "" {
 		c.Set(ResponseKey, response)
 	}
 }

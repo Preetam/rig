@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -23,9 +24,22 @@ func (e ServerError) Error() string {
 }
 
 func New(baseURI, token string) *Client {
+	transport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   3 * time.Second,
+			KeepAlive: 1 * time.Second,
+			DualStack: true,
+		}).DialContext,
+		MaxIdleConns:          2,
+		IdleConnTimeout:       1 * time.Second,
+		TLSHandshakeTimeout:   1 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
 	return &Client{
 		http: &http.Client{
-			Timeout: time.Second * 30,
+			Timeout:   time.Second * 1,
+			Transport: transport,
 		},
 		headers: map[string]string{
 			"Accept":       "application/json",
