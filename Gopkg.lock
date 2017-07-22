@@ -4,14 +4,14 @@
 [[projects]]
   name = "github.com/Preetam/lm2"
   packages = ["."]
-  revision = "caae31f4f831dc88b3dc06d5965dea566033874e"
-  version = "v2.0.0-pre2"
+  revision = "720acf9445599bd92e51ab3c0862a34b9527fdf6"
+  version = "v2.0.0"
 
 [[projects]]
   name = "github.com/Preetam/lm2log"
   packages = ["."]
-  revision = "b2ebe5634abc759e3340ef506cd7e81a34276ed3"
-  version = "v1.0.0"
+  revision = "5df40bd096b36fcb73b3fa6b4d7afb774d7e4da6"
+  version = "v1.1.1"
 
 [[projects]]
   name = "github.com/Preetam/siesta"
@@ -22,6 +22,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "e9382a04925b00ab5d0f3a49f0f4dfaae48f5a0e9af338cf65346ceb58251dc9"
+  inputs-digest = "cf9b23bc92bb7cef78d9ce62b49732fcf2bbf019921eded5b207c79e45c23ad2"
   solver-name = "gps-cdcl"
   solver-version = 1

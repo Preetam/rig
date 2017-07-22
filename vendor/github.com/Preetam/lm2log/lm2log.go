@@ -14,32 +14,49 @@ const (
 )
 
 var (
-	ErrNotFound = errors.New("lm2log: not found")
+	ErrNotFound     = errors.New("lm2log: not found")
+	ErrDoesNotExist = errors.New("lm2log: does not exist")
 )
 
-// Log is a commit log.
+// Log is a commit log. NOTE: It is *not* goroutine-safe.
 type Log struct {
-	col *lm2.Collection
+	file string
+	col  *lm2.Collection
 }
 
 // New initializes a commit log in an lm2 collection.
-func New(col *lm2.Collection) (*Log, error) {
+func New(file string) (*Log, error) {
+	col, err := lm2.NewCollection(file, 100)
+	if err != nil {
+		return nil, err
+	}
+
 	l := &Log{
-		col: col,
+		file: file,
+		col:  col,
 	}
 
 	wb := lm2.NewWriteBatch()
 	wb.Set(committedKey, "0")
 	wb.Delete(preparedKey)
-	_, err := col.Update(wb)
+	_, err = col.Update(wb)
 
 	return l, err
 }
 
 // Open opens an existing commit log in an lm2 collection.
-func Open(col *lm2.Collection) (*Log, error) {
+func Open(file string) (*Log, error) {
+	col, err := lm2.OpenCollection(file, 100)
+	if err != nil {
+		if err == lm2.ErrDoesNotExist {
+			return nil, ErrDoesNotExist
+		}
+		return nil, err
+	}
+
 	l := &Log{
-		col: col,
+		file: file,
+		col:  col,
 	}
 
 	cur, err := col.NewCursor()
@@ -70,6 +87,10 @@ func (l *Log) Prepare(data string) error {
 
 	// Prepare
 	committedStr, err := cursorGet(cur, committedKey)
+	if err != nil {
+		return err
+	}
+
 	committed, err := strconv.ParseUint(committedStr, 10, 64)
 	if err != nil {
 		return err
@@ -199,6 +220,55 @@ func (l *Log) SetCommitted(record uint64, data string) error {
 	wb.Set(recordStr, data)
 	_, err = l.col.Update(wb)
 	return err
+}
+
+// Compact compacts the log and keeps up to recordsToKeep records.
+func (l *Log) Compact(recordsToKeep uint) error {
+	committed, err := l.Committed()
+	if err != nil {
+		return err
+	}
+	minRecord := uint64(0)
+	if committed > uint64(recordsToKeep) {
+		minRecord = committed - uint64(recordsToKeep)
+	}
+	err = l.col.CompactFunc(func(key string, value string) (string, string, bool) {
+		switch key {
+		case preparedKey, committedKey:
+			return key, value, true
+		}
+
+		recordNum, err := strconv.ParseUint(key, 10, 64)
+		if err != nil {
+			return key, value, true
+		}
+
+		if recordNum >= minRecord {
+			return key, value, true
+		}
+
+		return "", "", false
+	})
+	if err != nil {
+		return err
+	}
+
+	col, err := lm2.OpenCollection(l.file, 100)
+	if err != nil {
+		return err
+	}
+	l.col = col
+	return nil
+}
+
+// Close closes the log.
+func (l *Log) Close() {
+	l.col.Close()
+}
+
+// Destroy removes the log.
+func (l *Log) Destroy() error {
+	return l.col.Destroy()
 }
 
 func cursorGet(cur *lm2.Cursor, key string) (string, error) {

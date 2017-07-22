@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 
-	"github.com/Preetam/lm2"
 	"github.com/Preetam/lm2log"
 	"github.com/Preetam/rig/client"
 	"github.com/Preetam/rig/middleware"
@@ -44,6 +44,8 @@ type Log struct {
 	applyCommits bool
 	// commitLog represents the actual log on disk.
 	commitLog *lm2log.Log
+
+	lock sync.Mutex
 }
 
 func NewLog(logDir string, service Service, applyCommits bool) (*Log, error) {
@@ -52,36 +54,14 @@ func NewLog(logDir string, service Service, applyCommits bool) (*Log, error) {
 	if err != nil {
 		return nil, err
 	}
-	logCol, err := lm2.OpenCollection(filepath.Join(collectionPath, "log.lm2"), 100)
+	commitLog, err := lm2log.Open(filepath.Join(collectionPath, "log.lm2"))
 	if err != nil {
-		if err == lm2.ErrDoesNotExist {
-			return createLog(logDir, service, applyCommits)
+		if err == lm2log.ErrDoesNotExist {
+			commitLog, err = lm2log.New(filepath.Join(collectionPath, "log.lm2"))
 		}
-		return nil, LogError{Type: "collection_open", Err: err}
-	}
-
-	commitLog, err := lm2log.Open(logCol)
-	if err != nil {
-		return nil, LogError{Type: "lm2log_open", Err: err}
-	}
-
-	return &Log{
-		service:      service,
-		applyCommits: applyCommits,
-		commitLog:    commitLog,
-	}, nil
-}
-
-func createLog(logDir string, service Service, applyCommits bool) (*Log, error) {
-	collectionPath := filepath.Join(logDir, "log")
-	logCol, err := lm2.NewCollection(filepath.Join(collectionPath, "log.lm2"), 100)
-	if err != nil {
-		return nil, LogError{Type: "collection_create", Err: err}
-	}
-
-	commitLog, err := lm2log.New(logCol)
-	if err != nil {
-		return nil, LogError{Type: "lm2log_create", Err: err}
+		if err != nil {
+			return nil, LogError{Type: "commitlog_new", Err: err}
+		}
 	}
 
 	return &Log{
@@ -92,6 +72,9 @@ func createLog(logDir string, service Service, applyCommits bool) (*Log, error) 
 }
 
 func (l *Log) Prepared() (client.LogPayload, error) {
+	l.lock.Lock()
+	defer l.lock.Unlock()
+
 	var p client.LogPayload
 
 	preparedVersion, err := l.commitLog.Prepared()
@@ -138,6 +121,9 @@ func (l *Log) Prepared() (client.LogPayload, error) {
 }
 
 func (l *Log) Committed() (client.LogPayload, error) {
+	l.lock.Lock()
+	defer l.lock.Unlock()
+
 	var p client.LogPayload
 
 	committedVersion, err := l.commitLog.Committed()
@@ -185,6 +171,9 @@ func (l *Log) Committed() (client.LogPayload, error) {
 }
 
 func (l *Log) Prepare(payload client.LogPayload) error {
+	l.lock.Lock()
+	defer l.lock.Unlock()
+
 	committed, err := l.commitLog.Committed()
 	if err != nil {
 		return LogError{
@@ -232,6 +221,9 @@ func (l *Log) Prepare(payload client.LogPayload) error {
 }
 
 func (l *Log) Commit() error {
+	l.lock.Lock()
+	defer l.lock.Unlock()
+
 	err := l.commitLog.Commit()
 	if err != nil {
 		return LogError{
@@ -286,6 +278,9 @@ func (l *Log) Commit() error {
 }
 
 func (l *Log) Rollback() error {
+	l.lock.Lock()
+	defer l.lock.Unlock()
+
 	err := l.commitLog.Rollback()
 	if err != nil {
 		return LogError{
@@ -299,6 +294,9 @@ func (l *Log) Rollback() error {
 }
 
 func (l *Log) Record(version uint64) (client.LogPayload, error) {
+	l.lock.Lock()
+	defer l.lock.Unlock()
+
 	var p client.LogPayload
 
 	committedData, err := l.commitLog.Get(version)
@@ -329,6 +327,9 @@ func (l *Log) Record(version uint64) (client.LogPayload, error) {
 }
 
 func (l *Log) LockResources(o client.Operation) error {
+	l.lock.Lock()
+	defer l.lock.Unlock()
+
 	locked := l.service.LockResources(o)
 	if !locked {
 		return LogError{
@@ -341,7 +342,25 @@ func (l *Log) LockResources(o client.Operation) error {
 }
 
 func (l *Log) UnlockResources(o client.Operation) {
+	l.lock.Lock()
+	defer l.lock.Unlock()
+
 	l.service.UnlockResources(o)
+}
+
+func (l *Log) Compact(recordsToKeep uint) error {
+	l.lock.Lock()
+	defer l.lock.Unlock()
+
+	err := l.commitLog.Compact(recordsToKeep)
+	if err != nil {
+		return LogError{
+			Type:       "internal",
+			Err:        err,
+			StatusCode: http.StatusInternalServerError,
+		}
+	}
+	return nil
 }
 
 func (l *Log) Service() *siesta.Service {
@@ -445,6 +464,25 @@ func (l *Log) Service() *siesta.Service {
 		}
 
 		requestData.ResponseData = payload
+	})
+
+	logService.Route("POST", "/log/compact", "", func(c siesta.Context, w http.ResponseWriter, r *http.Request) {
+		requestData := c.Get(middleware.RequestDataKey).(*middleware.RequestData)
+		var params siesta.Params
+		keep := params.Uint64("keep", 10000, "Records to keep")
+		err := params.Parse(r.Form)
+		if err != nil {
+			requestData.ResponseError = err.Error()
+			requestData.StatusCode = http.StatusBadRequest
+			return
+		}
+
+		err = l.Compact(uint(*keep))
+		if err != nil {
+			requestData.ResponseError = err.Error()
+			requestData.StatusCode = err.(LogError).StatusCode
+			return
+		}
 	})
 
 	return logService
