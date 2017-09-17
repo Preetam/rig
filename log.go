@@ -69,6 +69,7 @@ func newRigLog(logDir string, token string, service Service, applyCommits bool) 
 		service:      service,
 		applyCommits: applyCommits,
 		commitLog:    commitLog,
+		token:        token,
 	}, nil
 }
 

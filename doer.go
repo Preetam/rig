@@ -214,7 +214,7 @@ func (d *doer) Handler() http.Handler {
 	service.AddPost(responseWriter)
 
 	service.Route("POST", "/do", "do endpoint", func(c siesta.Context, w http.ResponseWriter, r *http.Request) {
-		requestData := c.Get(requestDataKey).(requestData)
+		requestData := c.Get(requestDataKey).(*requestData)
 
 		var params siesta.Params
 		ignoreVersion := params.Bool("ignore-version", true, "Ignore version in payload")
