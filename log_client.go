@@ -1,4 +1,4 @@
-package client
+package rig
 
 import (
 	"encoding/json"
@@ -8,8 +8,8 @@ import (
 	"github.com/Preetam/lm2log"
 )
 
-type LogClient struct {
-	client *Client
+type logClient struct {
+	client *client
 }
 
 // LogPayload is request payload for log operations.
@@ -18,39 +18,42 @@ type LogPayload struct {
 	Op      Operation `json:"op"`
 }
 
-// Operation represents a log operation.
-type Operation struct {
+// operation represents a log operation.
+type operation struct {
 	M string          `json:"method"`
 	D json.RawMessage `json:"data"`
 }
 
 // NewOperation returns a new Operation.
-func NewOperation() Operation {
-	return Operation{}
-}
-
-func (o Operation) Method() string {
-	return o.M
-}
-
-func (o Operation) Data() []byte {
-	return []byte(o.D)
-}
-
-func NewLogClient(baseURI, token string) *LogClient {
-	return &LogClient{
-		client: New(baseURI, token),
+func NewOperation(method string, data json.RawMessage) Operation {
+	return operation{
+		M: method,
+		D: data,
 	}
 }
 
-func (c *LogClient) Prepared() (LogPayload, error) {
+func (o operation) Method() string {
+	return o.M
+}
+
+func (o operation) Data() json.RawMessage {
+	return o.D
+}
+
+func newLogClient(baseURI, token string) *logClient {
+	return &logClient{
+		client: newClient(baseURI, token),
+	}
+}
+
+func (c *logClient) Prepared() (LogPayload, error) {
 	payload := LogPayload{}
-	resp := APIResponse{
+	resp := apiResponse{
 		Data: &payload,
 	}
 	err := c.client.doRequest("GET", "/prepare", nil, &resp)
 	if err != nil {
-		if serverErr, ok := err.(ServerError); ok {
+		if serverErr, ok := err.(serverError); ok {
 			if serverErr == http.StatusNotFound {
 				return payload, lm2log.ErrNotFound
 			}
@@ -60,14 +63,14 @@ func (c *LogClient) Prepared() (LogPayload, error) {
 	return payload, nil
 }
 
-func (c *LogClient) Committed() (LogPayload, error) {
+func (c *logClient) Committed() (LogPayload, error) {
 	payload := LogPayload{}
-	resp := APIResponse{
+	resp := apiResponse{
 		Data: &payload,
 	}
 	err := c.client.doRequest("GET", "/commit", nil, &resp)
 	if err != nil {
-		if serverErr, ok := err.(ServerError); ok {
+		if serverErr, ok := err.(serverError); ok {
 			if serverErr == http.StatusNotFound {
 				return payload, lm2log.ErrNotFound
 			}
@@ -77,7 +80,7 @@ func (c *LogClient) Committed() (LogPayload, error) {
 	return payload, nil
 }
 
-func (c *LogClient) Prepare(payload LogPayload) error {
+func (c *logClient) Prepare(payload LogPayload) error {
 	err := c.client.doRequest("POST", "/prepare", &payload, nil)
 	if err != nil {
 		return err
@@ -85,17 +88,17 @@ func (c *LogClient) Prepare(payload LogPayload) error {
 	return nil
 }
 
-func (c *LogClient) Commit() error {
+func (c *logClient) Commit() error {
 	return c.client.doRequest("POST", "/commit", nil, nil)
 }
 
-func (c *LogClient) Rollback() error {
+func (c *logClient) Rollback() error {
 	return c.client.doRequest("POST", "/rollback", nil, nil)
 }
 
-func (c *LogClient) GetRecord(version uint64) (LogPayload, error) {
+func (c *logClient) GetRecord(version uint64) (LogPayload, error) {
 	p := LogPayload{}
-	resp := APIResponse{
+	resp := apiResponse{
 		Data: &p,
 	}
 	err := c.client.doRequest("GET", fmt.Sprintf("/record/%d", version), nil, &resp)

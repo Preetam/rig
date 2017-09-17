@@ -1,4 +1,4 @@
-package client
+package rig
 
 import (
 	"bytes"
@@ -10,29 +10,29 @@ import (
 	"time"
 )
 
-type Client struct {
+type client struct {
 	http    *http.Client
 	base    string
 	token   string
 	headers map[string]string
 }
 
-type ServerError int
+type serverError int
 
-func (e ServerError) Error() string {
+func (e serverError) Error() string {
 	return fmt.Sprintf("client: server status code %d", e)
 }
 
-type APIResponse struct {
+type apiResponse struct {
 	Data interface{} `json:"data,omitempty"`
 	Err  string      `json:"error,omitempty"`
 }
 
-func (r APIResponse) Error() string {
+func (r apiResponse) Error() string {
 	return r.Err
 }
 
-func New(baseURI, token string) *Client {
+func newClient(baseURI, token string) *client {
 	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: (&net.Dialer{
@@ -45,7 +45,7 @@ func New(baseURI, token string) *Client {
 		TLSHandshakeTimeout:   1 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 	}
-	return &Client{
+	return &client{
 		http: &http.Client{
 			Timeout:   time.Second * 1,
 			Transport: transport,
@@ -59,7 +59,7 @@ func New(baseURI, token string) *Client {
 	}
 }
 
-func (c *Client) doRequest(verb string, address string, body, response interface{}) error {
+func (c *client) doRequest(verb string, address string, body, response interface{}) error {
 	payload := bytes.NewBuffer(nil)
 	if body != nil {
 		err := json.NewEncoder(payload).Encode(body)
@@ -91,7 +91,7 @@ func (c *Client) doRequest(verb string, address string, body, response interface
 		if response != nil {
 			json.NewDecoder(res.Body).Decode(response)
 		}
-		return ServerError(res.StatusCode)
+		return serverError(res.StatusCode)
 	}
 
 	if response != nil {

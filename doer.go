@@ -8,14 +8,13 @@ import (
 	"time"
 
 	"github.com/Preetam/lm2log"
-	"github.com/Preetam/rig/internal/client"
 	"github.com/Preetam/siesta"
 )
 
 type doer struct {
 	lock       sync.Mutex
 	commitLog  *rigLog
-	peer       *client.LogClient
+	peer       *logClient
 	peerInSync bool
 	token      string
 
@@ -29,7 +28,7 @@ func newDoer(commitLog *rigLog, peer, token string) (*doer, error) {
 	}
 
 	if peer != "" {
-		d.peer = client.NewLogClient(peer, token)
+		d.peer = newLogClient(peer, token)
 
 		peerCommitted, err := d.peer.Committed()
 		if err != nil {
@@ -132,7 +131,7 @@ SKIP_PEER:
 	return d, nil
 }
 
-func (d *doer) do(p client.LogPayload, ignoreVersion bool) error {
+func (d *doer) do(p LogPayload, ignoreVersion bool) error {
 	d.lock.Lock()
 	defer d.lock.Unlock()
 
@@ -226,7 +225,7 @@ func (d *doer) Handler() func(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		var doPayload client.LogPayload
+		var doPayload LogPayload
 		err = json.NewDecoder(r.Body).Decode(&doPayload)
 		if err != nil {
 			requestData.ResponseError = err.Error()

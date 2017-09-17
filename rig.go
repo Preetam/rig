@@ -1,5 +1,7 @@
 package rig
 
+import "encoding/json"
+
 type Rig struct {
 	d         *doer
 	commitLog *rigLog
@@ -10,7 +12,7 @@ type Rig struct {
 
 type Operation interface {
 	Method() string
-	Data() []byte
+	Data() json.RawMessage
 }
 
 // New returns a new Rig.

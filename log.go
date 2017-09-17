@@ -10,7 +10,6 @@ import (
 	"sync"
 
 	"github.com/Preetam/lm2log"
-	"github.com/Preetam/rig/internal/client"
 	"github.com/Preetam/siesta"
 )
 
@@ -73,11 +72,11 @@ func newRigLog(logDir string, token string, service Service, applyCommits bool) 
 	}, nil
 }
 
-func (l *rigLog) Prepared() (client.LogPayload, error) {
+func (l *rigLog) Prepared() (LogPayload, error) {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
-	var p client.LogPayload
+	var p LogPayload
 
 	preparedVersion, err := l.commitLog.Prepared()
 	if err != nil {
@@ -104,7 +103,7 @@ func (l *rigLog) Prepared() (client.LogPayload, error) {
 		}
 	}
 
-	operation := client.NewOperation()
+	operation := &operation{}
 	err = json.Unmarshal([]byte(preparedData), &operation)
 	if err != nil {
 		return p, logError{
@@ -114,7 +113,7 @@ func (l *rigLog) Prepared() (client.LogPayload, error) {
 		}
 	}
 
-	p = client.LogPayload{
+	p = LogPayload{
 		Version: preparedVersion,
 		Op:      operation,
 	}
@@ -122,11 +121,11 @@ func (l *rigLog) Prepared() (client.LogPayload, error) {
 	return p, nil
 }
 
-func (l *rigLog) Committed() (client.LogPayload, error) {
+func (l *rigLog) Committed() (LogPayload, error) {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
-	var p client.LogPayload
+	var p LogPayload
 
 	committedVersion, err := l.commitLog.Committed()
 	if err != nil {
@@ -154,7 +153,7 @@ func (l *rigLog) Committed() (client.LogPayload, error) {
 		}
 	}
 
-	operation := client.NewOperation()
+	operation := operation{}
 	err = json.Unmarshal([]byte(committedData), &operation)
 	if err != nil {
 		return p, logError{
@@ -164,7 +163,7 @@ func (l *rigLog) Committed() (client.LogPayload, error) {
 		}
 	}
 
-	p = client.LogPayload{
+	p = LogPayload{
 		Version: committedVersion,
 		Op:      operation,
 	}
@@ -172,7 +171,7 @@ func (l *rigLog) Committed() (client.LogPayload, error) {
 	return p, nil
 }
 
-func (l *rigLog) Prepare(payload client.LogPayload) error {
+func (l *rigLog) Prepare(payload LogPayload) error {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
@@ -257,7 +256,7 @@ func (l *rigLog) Commit() error {
 		}
 	}
 
-	operation := client.NewOperation()
+	operation := operation{}
 	err = json.Unmarshal([]byte(committedData), &operation)
 	if err != nil {
 		return logError{
@@ -295,11 +294,11 @@ func (l *rigLog) Rollback() error {
 	return nil
 }
 
-func (l *rigLog) Record(version uint64) (client.LogPayload, error) {
+func (l *rigLog) Record(version uint64) (LogPayload, error) {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
-	var p client.LogPayload
+	var p LogPayload
 
 	committedData, err := l.commitLog.Get(version)
 	if err != nil {
@@ -310,7 +309,7 @@ func (l *rigLog) Record(version uint64) (client.LogPayload, error) {
 		}
 	}
 
-	operation := client.NewOperation()
+	operation := operation{}
 	err = json.Unmarshal([]byte(committedData), &operation)
 	if err != nil {
 		return p, logError{
@@ -320,7 +319,7 @@ func (l *rigLog) Record(version uint64) (client.LogPayload, error) {
 		}
 	}
 
-	p = client.LogPayload{
+	p = LogPayload{
 		Version: version,
 		Op:      operation,
 	}
@@ -328,7 +327,7 @@ func (l *rigLog) Record(version uint64) (client.LogPayload, error) {
 	return p, nil
 }
 
-func (l *rigLog) LockResources(o client.Operation) error {
+func (l *rigLog) LockResources(o Operation) error {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
@@ -343,7 +342,7 @@ func (l *rigLog) LockResources(o client.Operation) error {
 	return nil
 }
 
-func (l *rigLog) UnlockResources(o client.Operation) {
+func (l *rigLog) UnlockResources(o Operation) {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
@@ -387,7 +386,7 @@ func (l *rigLog) Service() *siesta.Service {
 
 	logService.Route("POST", "/log/prepare", "", func(c siesta.Context, w http.ResponseWriter, r *http.Request) {
 		requestData := c.Get(requestDataKey).(*requestData)
-		var preparePayload client.LogPayload
+		var preparePayload LogPayload
 
 		err := json.NewDecoder(r.Body).Decode(&preparePayload)
 		if err != nil {
@@ -452,7 +451,7 @@ func (l *rigLog) Service() *siesta.Service {
 			return
 		}
 
-		operation := client.NewOperation()
+		operation := operation{}
 		err = json.Unmarshal([]byte(data), &operation)
 		if err != nil {
 			requestData.ResponseError = err.Error()
@@ -460,7 +459,7 @@ func (l *rigLog) Service() *siesta.Service {
 			return
 		}
 
-		payload := client.LogPayload{
+		payload := LogPayload{
 			Version: *id,
 			Op:      operation,
 		}

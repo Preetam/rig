@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Preetam/rig/internal/client"
 	"github.com/Preetam/siesta"
 )
 
@@ -41,7 +40,7 @@ func requestIdentifier(c siesta.Context, w http.ResponseWriter, r *http.Request)
 
 func responseGenerator(c siesta.Context, w http.ResponseWriter, r *http.Request) {
 	requestData := c.Get(requestDataKey).(*requestData)
-	response := client.APIResponse{}
+	response := apiResponse{}
 
 	if data := requestData.ResponseData; data != nil {
 		response.Data = data
