@@ -1,18 +1,11 @@
 package rig
 
-import "encoding/json"
-
 type Rig struct {
 	d         *doer
 	commitLog *rigLog
 
 	// auth token
 	token string
-}
-
-type Operation interface {
-	Method() string
-	Data() json.RawMessage
 }
 
 // New returns a new Rig.

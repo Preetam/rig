@@ -103,7 +103,7 @@ func (l *rigLog) Prepared() (LogPayload, error) {
 		}
 	}
 
-	operation := &operation{}
+	operation := Operation{}
 	err = json.Unmarshal([]byte(preparedData), &operation)
 	if err != nil {
 		return p, logError{
@@ -153,7 +153,7 @@ func (l *rigLog) Committed() (LogPayload, error) {
 		}
 	}
 
-	operation := operation{}
+	operation := Operation{}
 	err = json.Unmarshal([]byte(committedData), &operation)
 	if err != nil {
 		return p, logError{
@@ -256,7 +256,7 @@ func (l *rigLog) Commit() error {
 		}
 	}
 
-	operation := operation{}
+	operation := Operation{}
 	err = json.Unmarshal([]byte(committedData), &operation)
 	if err != nil {
 		return logError{
@@ -309,7 +309,7 @@ func (l *rigLog) Record(version uint64) (LogPayload, error) {
 		}
 	}
 
-	operation := operation{}
+	operation := Operation{}
 	err = json.Unmarshal([]byte(committedData), &operation)
 	if err != nil {
 		return p, logError{
@@ -451,7 +451,7 @@ func (l *rigLog) Service() *siesta.Service {
 			return
 		}
 
-		operation := operation{}
+		operation := Operation{}
 		err = json.Unmarshal([]byte(data), &operation)
 		if err != nil {
 			requestData.ResponseError = err.Error()

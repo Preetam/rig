@@ -18,26 +18,25 @@ type LogPayload struct {
 	Op      Operation `json:"op"`
 }
 
-// operation represents a log operation.
-type operation struct {
-	M string          `json:"method"`
-	D json.RawMessage `json:"data"`
+func NewLogPayload(version uint64, op Operation) *LogPayload {
+	return &LogPayload{
+		Version: version,
+		Op:      op,
+	}
+}
+
+// Operation represents a log operation.
+type Operation struct {
+	Method string          `json:"method"`
+	Data   json.RawMessage `json:"data"`
 }
 
 // NewOperation returns a new Operation.
 func NewOperation(method string, data json.RawMessage) Operation {
-	return operation{
-		M: method,
-		D: data,
+	return Operation{
+		Method: method,
+		Data:   data,
 	}
-}
-
-func (o operation) Method() string {
-	return o.M
-}
-
-func (o operation) Data() json.RawMessage {
-	return o.D
 }
 
 func newLogClient(baseURI, token string) *logClient {
