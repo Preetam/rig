@@ -1,5 +1,7 @@
 package rig
 
+import "net/http"
+
 type Rig struct {
 	d         *doer
 	commitLog *rigLog
@@ -22,4 +24,12 @@ func New(logDir string, service Service, applyCommits bool, token, peer string) 
 		d:         d,
 		commitLog: commitLog,
 	}, nil
+}
+
+func (r *Rig) LogService() http.Handler {
+	return r.commitLog.Handler()
+}
+
+func (r *Rig) DoService() http.Handler {
+	return r.d.Handler()
 }

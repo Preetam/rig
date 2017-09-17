@@ -206,7 +206,7 @@ func (d *doer) do(p LogPayload, ignoreVersion bool) error {
 	return nil
 }
 
-func (d *doer) Handler() func(w http.ResponseWriter, r *http.Request) {
+func (d *doer) Handler() http.Handler {
 	service := siesta.NewService("/")
 	service.AddPre(requestIdentifier)
 	service.AddPre(checkAuth(d.token))
@@ -246,7 +246,7 @@ func (d *doer) Handler() func(w http.ResponseWriter, r *http.Request) {
 		}
 	})
 
-	return service.ServeHTTP
+	return service
 }
 
 func (d *doer) syncPeer() {

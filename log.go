@@ -364,7 +364,7 @@ func (l *rigLog) Compact(recordsToKeep uint) error {
 	return nil
 }
 
-func (l *rigLog) Service() *siesta.Service {
+func (l *rigLog) Handler() http.Handler {
 	commitLog := l.commitLog
 
 	logService := siesta.NewService("/")
