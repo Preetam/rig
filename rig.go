@@ -26,10 +26,10 @@ func New(logDir string, service Service, applyCommits bool, token, peer string) 
 	}, nil
 }
 
-func (r *Rig) LogService() http.Handler {
+func (r *Rig) LogHandler() http.Handler {
 	return r.commitLog.Handler()
 }
 
-func (r *Rig) DoService() http.Handler {
+func (r *Rig) DoHandler() http.Handler {
 	return r.d.Handler()
 }
