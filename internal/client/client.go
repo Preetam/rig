@@ -23,6 +23,15 @@ func (e ServerError) Error() string {
 	return fmt.Sprintf("client: server status code %d", e)
 }
 
+type APIResponse struct {
+	Data interface{} `json:"data,omitempty"`
+	Err  string      `json:"error,omitempty"`
+}
+
+func (r APIResponse) Error() string {
+	return r.Err
+}
+
 func New(baseURI, token string) *Client {
 	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,

@@ -8,29 +8,30 @@ import (
 	"time"
 
 	"github.com/Preetam/lm2log"
-	"github.com/Preetam/rig/client"
-	"github.com/Preetam/rig/middleware"
+	"github.com/Preetam/rig/internal/client"
 	"github.com/Preetam/siesta"
 )
 
-type Doer struct {
+type doer struct {
 	lock       sync.Mutex
-	commitLog  *Log
+	commitLog  *rigLog
 	peer       *client.LogClient
 	peerInSync bool
+	token      string
 
 	errCount int
 }
 
-func NewDoer(commitLog *Log, peer string) (*Doer, error) {
-	doer := &Doer{
+func newDoer(commitLog *rigLog, peer, token string) (*doer, error) {
+	d := &doer{
 		commitLog: commitLog,
+		token:     token,
 	}
 
 	if peer != "" {
-		doer.peer = client.NewLogClient(peer)
+		d.peer = client.NewLogClient(peer, token)
 
-		peerCommitted, err := doer.peer.Committed()
+		peerCommitted, err := d.peer.Committed()
 		if err != nil {
 			if err != lm2log.ErrNotFound {
 				goto SKIP_PEER
@@ -40,7 +41,7 @@ func NewDoer(commitLog *Log, peer string) (*Doer, error) {
 
 		localCommitted, err := commitLog.Committed()
 		if err != nil {
-			if err.(LogError).StatusCode != http.StatusNotFound {
+			if err.(logError).StatusCode != http.StatusNotFound {
 				return nil, err
 			}
 		}
@@ -56,12 +57,12 @@ func NewDoer(commitLog *Log, peer string) (*Doer, error) {
 					log.Println(err)
 					goto SKIP_PEER
 				}
-				err = doer.peer.Prepare(payload)
+				err = d.peer.Prepare(payload)
 				if err != nil {
 					log.Println(err)
 					goto SKIP_PEER
 				}
-				err = doer.peer.Commit()
+				err = d.peer.Commit()
 				if err != nil {
 					log.Println(err)
 					goto SKIP_PEER
@@ -75,7 +76,7 @@ func NewDoer(commitLog *Log, peer string) (*Doer, error) {
 			}
 			for i := localCommittedVersion; i != peerCommittedVersion; i++ {
 				// Get the ith record.
-				payload, err := doer.peer.GetRecord(i + 1)
+				payload, err := d.peer.GetRecord(i + 1)
 				if err != nil {
 					return nil, err
 				}
@@ -92,7 +93,7 @@ func NewDoer(commitLog *Log, peer string) (*Doer, error) {
 
 		// Now the committed versions are synced up. It's time to handle the prepared case.
 
-		peerPrepared, err := doer.peer.Prepared()
+		peerPrepared, err := d.peer.Prepared()
 		if err != nil {
 			if err != lm2log.ErrNotFound {
 				goto SKIP_PEER
@@ -102,7 +103,7 @@ func NewDoer(commitLog *Log, peer string) (*Doer, error) {
 
 		localPrepared, err := commitLog.Prepared()
 		if err != nil {
-			if err.(LogError).StatusCode != http.StatusNotFound {
+			if err.(logError).StatusCode != http.StatusNotFound {
 				return nil, err
 			}
 		}
@@ -115,23 +116,23 @@ func NewDoer(commitLog *Log, peer string) (*Doer, error) {
 			if err != nil {
 				return nil, err
 			}
-			err = doer.peer.Rollback()
+			err = d.peer.Rollback()
 			if err != nil {
 				goto SKIP_PEER
 			}
 		}
 	}
-	doer.peerInSync = true
+	d.peerInSync = true
 SKIP_PEER:
 	err := commitLog.Commit()
 	if err != nil {
 		return nil, err
 	}
-	go doer.syncPeer()
-	return doer, nil
+	go d.syncPeer()
+	return d, nil
 }
 
-func (d *Doer) Do(p client.LogPayload, ignoreVersion bool) error {
+func (d *doer) do(p client.LogPayload, ignoreVersion bool) error {
 	d.lock.Lock()
 	defer d.lock.Unlock()
 
@@ -143,7 +144,7 @@ func (d *Doer) Do(p client.LogPayload, ignoreVersion bool) error {
 
 	committedPayload, err := d.commitLog.Committed()
 	if err != nil {
-		if err.(LogError).Err != nil {
+		if err.(logError).Err != nil {
 			log.Println("couldn't get prepared version:", err)
 			return err
 		}
@@ -206,15 +207,15 @@ func (d *Doer) Do(p client.LogPayload, ignoreVersion bool) error {
 	return nil
 }
 
-func (d *Doer) Handler() func(w http.ResponseWriter, r *http.Request) {
+func (d *doer) Handler() func(w http.ResponseWriter, r *http.Request) {
 	service := siesta.NewService("/")
-	service.AddPre(middleware.RequestIdentifier)
-	service.AddPre(middleware.CheckAuth)
-	service.AddPost(middleware.ResponseGenerator)
-	service.AddPost(middleware.ResponseWriter)
+	service.AddPre(requestIdentifier)
+	service.AddPre(checkAuth(d.token))
+	service.AddPost(responseGenerator)
+	service.AddPost(responseWriter)
 
 	service.Route("POST", "/do", "do endpoint", func(c siesta.Context, w http.ResponseWriter, r *http.Request) {
-		requestData := c.Get(middleware.RequestDataKey).(*middleware.RequestData)
+		requestData := c.Get(requestDataKey).(requestData)
 
 		var params siesta.Params
 		ignoreVersion := params.Bool("ignore-version", true, "Ignore version in payload")
@@ -233,10 +234,10 @@ func (d *Doer) Handler() func(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		err = d.Do(doPayload, *ignoreVersion)
+		err = d.do(doPayload, *ignoreVersion)
 		if err != nil {
 			requestData.ResponseError = err.Error()
-			if logErr, ok := err.(LogError); ok {
+			if logErr, ok := err.(logError); ok {
 				requestData.StatusCode = logErr.StatusCode
 			} else {
 				requestData.StatusCode = http.StatusInternalServerError
@@ -249,7 +250,7 @@ func (d *Doer) Handler() func(w http.ResponseWriter, r *http.Request) {
 	return service.ServeHTTP
 }
 
-func (d *Doer) syncPeer() {
+func (d *doer) syncPeer() {
 	if d.peer == nil {
 		return
 	}

@@ -10,12 +10,11 @@ import (
 	"sync"
 
 	"github.com/Preetam/lm2log"
-	"github.com/Preetam/rig/client"
-	"github.com/Preetam/rig/middleware"
+	"github.com/Preetam/rig/internal/client"
 	"github.com/Preetam/siesta"
 )
 
-type LogError struct {
+type logError struct {
 	// Error type
 	Type string
 	// HTTP status code
@@ -24,19 +23,19 @@ type LogError struct {
 	Err error
 }
 
-func (err LogError) Error() string {
-	return fmt.Sprintf("LogError [%s-%d] (%s)", err.Type, err.StatusCode, err.Err)
+func (err logError) Error() string {
+	return fmt.Sprintf("logError [%s-%d] (%s)", err.Type, err.StatusCode, err.Err)
 }
 
 type Service interface {
-	Validate(client.Operation) error
-	Apply(uint64, client.Operation) error
-	LockResources(client.Operation) bool
-	UnlockResources(client.Operation)
+	Validate(Operation) error
+	Apply(uint64, Operation) error
+	LockResources(Operation) bool
+	UnlockResources(Operation)
 }
 
-// Log represents a commit log.
-type Log struct {
+// rigLog represents a commit log.
+type rigLog struct {
 	// service is the service being modified.
 	service Service
 	// apply determines whether or not commits are
@@ -45,10 +44,13 @@ type Log struct {
 	// commitLog represents the actual log on disk.
 	commitLog *lm2log.Log
 
+	// token represents a token used for authentication
+	token string
+
 	lock sync.Mutex
 }
 
-func NewLog(logDir string, service Service, applyCommits bool) (*Log, error) {
+func newRigLog(logDir string, token string, service Service, applyCommits bool) (*rigLog, error) {
 	collectionPath := filepath.Join(logDir, "log")
 	err := os.MkdirAll(collectionPath, 0755)
 	if err != nil {
@@ -60,18 +62,18 @@ func NewLog(logDir string, service Service, applyCommits bool) (*Log, error) {
 			commitLog, err = lm2log.New(filepath.Join(collectionPath, "log.lm2"))
 		}
 		if err != nil {
-			return nil, LogError{Type: "commitlog_new", Err: err}
+			return nil, logError{Type: "commitlog_new", Err: err}
 		}
 	}
 
-	return &Log{
+	return &rigLog{
 		service:      service,
 		applyCommits: applyCommits,
 		commitLog:    commitLog,
 	}, nil
 }
 
-func (l *Log) Prepared() (client.LogPayload, error) {
+func (l *rigLog) Prepared() (client.LogPayload, error) {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
@@ -80,13 +82,13 @@ func (l *Log) Prepared() (client.LogPayload, error) {
 	preparedVersion, err := l.commitLog.Prepared()
 	if err != nil {
 		if err == lm2log.ErrNotFound {
-			return p, LogError{
+			return p, logError{
 				Type:       "internal",
 				Err:        err,
 				StatusCode: http.StatusNotFound,
 			}
 		}
-		return p, LogError{
+		return p, logError{
 			Type:       "internal",
 			Err:        err,
 			StatusCode: http.StatusInternalServerError,
@@ -95,7 +97,7 @@ func (l *Log) Prepared() (client.LogPayload, error) {
 
 	preparedData, err := l.commitLog.Get(preparedVersion)
 	if err != nil {
-		return p, LogError{
+		return p, logError{
 			Type:       "internal",
 			Err:        err,
 			StatusCode: http.StatusInternalServerError,
@@ -105,7 +107,7 @@ func (l *Log) Prepared() (client.LogPayload, error) {
 	operation := client.NewOperation()
 	err = json.Unmarshal([]byte(preparedData), &operation)
 	if err != nil {
-		return p, LogError{
+		return p, logError{
 			Type:       "internal",
 			Err:        err,
 			StatusCode: http.StatusInternalServerError,
@@ -120,7 +122,7 @@ func (l *Log) Prepared() (client.LogPayload, error) {
 	return p, nil
 }
 
-func (l *Log) Committed() (client.LogPayload, error) {
+func (l *rigLog) Committed() (client.LogPayload, error) {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
@@ -128,7 +130,7 @@ func (l *Log) Committed() (client.LogPayload, error) {
 
 	committedVersion, err := l.commitLog.Committed()
 	if err != nil {
-		return p, LogError{
+		return p, logError{
 			Type:       "internal",
 			Err:        err,
 			StatusCode: http.StatusInternalServerError,
@@ -136,7 +138,7 @@ func (l *Log) Committed() (client.LogPayload, error) {
 	}
 
 	if committedVersion == 0 {
-		return p, LogError{
+		return p, logError{
 			Type:       "internal",
 			Err:        nil,
 			StatusCode: http.StatusNotFound,
@@ -145,7 +147,7 @@ func (l *Log) Committed() (client.LogPayload, error) {
 
 	committedData, err := l.commitLog.Get(committedVersion)
 	if err != nil {
-		return p, LogError{
+		return p, logError{
 			Type:       "internal",
 			Err:        err,
 			StatusCode: http.StatusInternalServerError,
@@ -155,7 +157,7 @@ func (l *Log) Committed() (client.LogPayload, error) {
 	operation := client.NewOperation()
 	err = json.Unmarshal([]byte(committedData), &operation)
 	if err != nil {
-		return p, LogError{
+		return p, logError{
 			Type:       "internal",
 			Err:        err,
 			StatusCode: http.StatusInternalServerError,
@@ -170,13 +172,13 @@ func (l *Log) Committed() (client.LogPayload, error) {
 	return p, nil
 }
 
-func (l *Log) Prepare(payload client.LogPayload) error {
+func (l *rigLog) Prepare(payload client.LogPayload) error {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
 	committed, err := l.commitLog.Committed()
 	if err != nil {
-		return LogError{
+		return logError{
 			Type:       "internal",
 			Err:        err,
 			StatusCode: http.StatusInternalServerError,
@@ -184,7 +186,7 @@ func (l *Log) Prepare(payload client.LogPayload) error {
 	}
 
 	if payload.Version != committed+1 {
-		return LogError{
+		return logError{
 			Type:       "internal",
 			Err:        errors.New("preparing invalid version"),
 			StatusCode: http.StatusBadRequest,
@@ -193,7 +195,7 @@ func (l *Log) Prepare(payload client.LogPayload) error {
 
 	err = l.service.Validate(payload.Op)
 	if err != nil {
-		return LogError{
+		return logError{
 			Type:       "internal",
 			Err:        errors.New("invalid operation"),
 			StatusCode: http.StatusBadRequest,
@@ -202,7 +204,7 @@ func (l *Log) Prepare(payload client.LogPayload) error {
 
 	data, err := json.Marshal(payload.Op)
 	if err != nil {
-		return LogError{
+		return logError{
 			Type:       "internal",
 			Err:        err,
 			StatusCode: http.StatusInternalServerError,
@@ -211,7 +213,7 @@ func (l *Log) Prepare(payload client.LogPayload) error {
 
 	err = l.commitLog.Prepare(string(data))
 	if err != nil {
-		return LogError{
+		return logError{
 			Type:       "internal",
 			Err:        err,
 			StatusCode: http.StatusInternalServerError,
@@ -220,13 +222,13 @@ func (l *Log) Prepare(payload client.LogPayload) error {
 	return nil
 }
 
-func (l *Log) Commit() error {
+func (l *rigLog) Commit() error {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
 	err := l.commitLog.Commit()
 	if err != nil {
-		return LogError{
+		return logError{
 			Type:       "internal",
 			Err:        err,
 			StatusCode: http.StatusInternalServerError,
@@ -235,7 +237,7 @@ func (l *Log) Commit() error {
 
 	committedVersion, err := l.commitLog.Committed()
 	if err != nil {
-		return LogError{
+		return logError{
 			Type:       "internal",
 			Err:        err,
 			StatusCode: http.StatusInternalServerError,
@@ -248,7 +250,7 @@ func (l *Log) Commit() error {
 
 	committedData, err := l.commitLog.Get(committedVersion)
 	if err != nil {
-		return LogError{
+		return logError{
 			Type:       "internal",
 			Err:        err,
 			StatusCode: http.StatusInternalServerError,
@@ -258,7 +260,7 @@ func (l *Log) Commit() error {
 	operation := client.NewOperation()
 	err = json.Unmarshal([]byte(committedData), &operation)
 	if err != nil {
-		return LogError{
+		return logError{
 			Type:       "internal",
 			Err:        err,
 			StatusCode: http.StatusInternalServerError,
@@ -267,7 +269,7 @@ func (l *Log) Commit() error {
 
 	err = l.service.Apply(committedVersion, operation)
 	if err != nil {
-		return LogError{
+		return logError{
 			Type:       "internal",
 			Err:        err,
 			StatusCode: http.StatusInternalServerError,
@@ -277,13 +279,13 @@ func (l *Log) Commit() error {
 	return nil
 }
 
-func (l *Log) Rollback() error {
+func (l *rigLog) Rollback() error {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
 	err := l.commitLog.Rollback()
 	if err != nil {
-		return LogError{
+		return logError{
 			Type:       "internal",
 			Err:        err,
 			StatusCode: http.StatusInternalServerError,
@@ -293,7 +295,7 @@ func (l *Log) Rollback() error {
 	return nil
 }
 
-func (l *Log) Record(version uint64) (client.LogPayload, error) {
+func (l *rigLog) Record(version uint64) (client.LogPayload, error) {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
@@ -301,7 +303,7 @@ func (l *Log) Record(version uint64) (client.LogPayload, error) {
 
 	committedData, err := l.commitLog.Get(version)
 	if err != nil {
-		return p, LogError{
+		return p, logError{
 			Type:       "internal",
 			Err:        err,
 			StatusCode: http.StatusInternalServerError,
@@ -311,7 +313,7 @@ func (l *Log) Record(version uint64) (client.LogPayload, error) {
 	operation := client.NewOperation()
 	err = json.Unmarshal([]byte(committedData), &operation)
 	if err != nil {
-		return p, LogError{
+		return p, logError{
 			Type:       "internal",
 			Err:        err,
 			StatusCode: http.StatusInternalServerError,
@@ -326,13 +328,13 @@ func (l *Log) Record(version uint64) (client.LogPayload, error) {
 	return p, nil
 }
 
-func (l *Log) LockResources(o client.Operation) error {
+func (l *rigLog) LockResources(o client.Operation) error {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
 	locked := l.service.LockResources(o)
 	if !locked {
-		return LogError{
+		return logError{
 			Type:       "internal",
 			Err:        errors.New("resource busy"),
 			StatusCode: http.StatusServiceUnavailable,
@@ -341,20 +343,20 @@ func (l *Log) LockResources(o client.Operation) error {
 	return nil
 }
 
-func (l *Log) UnlockResources(o client.Operation) {
+func (l *rigLog) UnlockResources(o client.Operation) {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
 	l.service.UnlockResources(o)
 }
 
-func (l *Log) Compact(recordsToKeep uint) error {
+func (l *rigLog) Compact(recordsToKeep uint) error {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
 	err := l.commitLog.Compact(recordsToKeep)
 	if err != nil {
-		return LogError{
+		return logError{
 			Type:       "internal",
 			Err:        err,
 			StatusCode: http.StatusInternalServerError,
@@ -363,28 +365,28 @@ func (l *Log) Compact(recordsToKeep uint) error {
 	return nil
 }
 
-func (l *Log) Service() *siesta.Service {
+func (l *rigLog) Service() *siesta.Service {
 	commitLog := l.commitLog
 
 	logService := siesta.NewService("/")
-	logService.AddPre(middleware.RequestIdentifier)
-	logService.AddPre(middleware.CheckAuth)
-	logService.AddPost(middleware.ResponseGenerator)
-	logService.AddPost(middleware.ResponseWriter)
+	logService.AddPre(requestIdentifier)
+	logService.AddPre(checkAuth(l.token))
+	logService.AddPost(responseGenerator)
+	logService.AddPost(responseWriter)
 
 	logService.Route("GET", "/log/prepare", "", func(c siesta.Context, w http.ResponseWriter, r *http.Request) {
-		requestData := c.Get(middleware.RequestDataKey).(*middleware.RequestData)
+		requestData := c.Get(requestDataKey).(*requestData)
 		payload, err := l.Prepared()
 		if err != nil {
 			requestData.ResponseError = err.Error()
-			requestData.StatusCode = err.(LogError).StatusCode
+			requestData.StatusCode = err.(logError).StatusCode
 			return
 		}
 		requestData.ResponseData = payload
 	})
 
 	logService.Route("POST", "/log/prepare", "", func(c siesta.Context, w http.ResponseWriter, r *http.Request) {
-		requestData := c.Get(middleware.RequestDataKey).(*middleware.RequestData)
+		requestData := c.Get(requestDataKey).(*requestData)
 		var preparePayload client.LogPayload
 
 		err := json.NewDecoder(r.Body).Decode(&preparePayload)
@@ -397,24 +399,24 @@ func (l *Log) Service() *siesta.Service {
 		err = l.Prepare(preparePayload)
 		if err != nil {
 			requestData.ResponseError = err.Error()
-			requestData.StatusCode = err.(LogError).StatusCode
+			requestData.StatusCode = err.(logError).StatusCode
 			return
 		}
 	})
 
 	logService.Route("GET", "/log/commit", "", func(c siesta.Context, w http.ResponseWriter, r *http.Request) {
-		requestData := c.Get(middleware.RequestDataKey).(*middleware.RequestData)
+		requestData := c.Get(requestDataKey).(*requestData)
 		payload, err := l.Committed()
 		if err != nil {
 			requestData.ResponseError = err.Error()
-			requestData.StatusCode = err.(LogError).StatusCode
+			requestData.StatusCode = err.(logError).StatusCode
 			return
 		}
 		requestData.ResponseData = payload
 	})
 
 	logService.Route("POST", "/log/rollback", "", func(c siesta.Context, w http.ResponseWriter, r *http.Request) {
-		requestData := c.Get(middleware.RequestDataKey).(*middleware.RequestData)
+		requestData := c.Get(requestDataKey).(*requestData)
 		err := commitLog.Rollback()
 		if err != nil {
 			requestData.ResponseError = err.Error()
@@ -424,17 +426,17 @@ func (l *Log) Service() *siesta.Service {
 	})
 
 	logService.Route("POST", "/log/commit", "", func(c siesta.Context, w http.ResponseWriter, r *http.Request) {
-		requestData := c.Get(middleware.RequestDataKey).(*middleware.RequestData)
+		requestData := c.Get(requestDataKey).(*requestData)
 		err := l.Commit()
 		if err != nil {
 			requestData.ResponseError = err.Error()
-			requestData.StatusCode = err.(LogError).StatusCode
+			requestData.StatusCode = err.(logError).StatusCode
 			return
 		}
 	})
 
 	logService.Route("GET", "/log/record/:id", "", func(c siesta.Context, w http.ResponseWriter, r *http.Request) {
-		requestData := c.Get(middleware.RequestDataKey).(*middleware.RequestData)
+		requestData := c.Get(requestDataKey).(*requestData)
 
 		var params siesta.Params
 		id := params.Uint64("id", 0, "")
@@ -467,7 +469,7 @@ func (l *Log) Service() *siesta.Service {
 	})
 
 	logService.Route("POST", "/log/compact", "", func(c siesta.Context, w http.ResponseWriter, r *http.Request) {
-		requestData := c.Get(middleware.RequestDataKey).(*middleware.RequestData)
+		requestData := c.Get(requestDataKey).(*requestData)
 		var params siesta.Params
 		keep := params.Uint64("keep", 10000, "Records to keep")
 		err := params.Parse(r.Form)
@@ -480,7 +482,7 @@ func (l *Log) Service() *siesta.Service {
 		err = l.Compact(uint(*keep))
 		if err != nil {
 			requestData.ResponseError = err.Error()
-			requestData.StatusCode = err.(LogError).StatusCode
+			requestData.StatusCode = err.(logError).StatusCode
 			return
 		}
 	})

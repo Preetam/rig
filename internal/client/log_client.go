@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/Preetam/lm2log"
-	"github.com/Preetam/rig/middleware"
 )
 
 type LogClient struct {
@@ -21,8 +20,8 @@ type LogPayload struct {
 
 // Operation represents a log operation.
 type Operation struct {
-	Method string          `json:"method"`
-	Data   json.RawMessage `json:"data"`
+	M string          `json:"method"`
+	D json.RawMessage `json:"data"`
 }
 
 // NewOperation returns a new Operation.
@@ -30,15 +29,23 @@ func NewOperation() Operation {
 	return Operation{}
 }
 
-func NewLogClient(baseURI string) *LogClient {
+func (o Operation) Method() string {
+	return o.M
+}
+
+func (o Operation) Data() []byte {
+	return []byte(o.D)
+}
+
+func NewLogClient(baseURI, token string) *LogClient {
 	return &LogClient{
-		client: New(baseURI, middleware.Token),
+		client: New(baseURI, token),
 	}
 }
 
 func (c *LogClient) Prepared() (LogPayload, error) {
 	payload := LogPayload{}
-	resp := middleware.APIResponse{
+	resp := APIResponse{
 		Data: &payload,
 	}
 	err := c.client.doRequest("GET", "/prepare", nil, &resp)
@@ -55,7 +62,7 @@ func (c *LogClient) Prepared() (LogPayload, error) {
 
 func (c *LogClient) Committed() (LogPayload, error) {
 	payload := LogPayload{}
-	resp := middleware.APIResponse{
+	resp := APIResponse{
 		Data: &payload,
 	}
 	err := c.client.doRequest("GET", "/commit", nil, &resp)
@@ -88,7 +95,7 @@ func (c *LogClient) Rollback() error {
 
 func (c *LogClient) GetRecord(version uint64) (LogPayload, error) {
 	p := LogPayload{}
-	resp := middleware.APIResponse{
+	resp := APIResponse{
 		Data: &p,
 	}
 	err := c.client.doRequest("GET", fmt.Sprintf("/record/%d", version), nil, &resp)
