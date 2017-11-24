@@ -266,11 +266,11 @@ func (d *doer) syncPeer() {
 		if d.peerInSync {
 			// already in sync
 			d.lock.Unlock()
-			log.Println("peer is in sync")
+			log.Println("PEER: peer is in sync")
 			sleep = true
 			continue
 		}
-		log.Println("peer is not in sync")
+		log.Println("PEER: peer is not in sync")
 		d.lock.Unlock()
 
 		d.peer.Rollback()
@@ -278,6 +278,7 @@ func (d *doer) syncPeer() {
 		if err != nil {
 			if err != lm2log.ErrNotFound {
 				sleep = true
+				log.Println("PEER:", err)
 				continue
 			}
 		}
@@ -288,6 +289,7 @@ func (d *doer) syncPeer() {
 		if err != nil {
 			sleep = true
 			d.lock.Unlock()
+			log.Println("PEER:", err)
 			continue
 		}
 		localCommittedVersion := localCommitted.Version
@@ -296,6 +298,7 @@ func (d *doer) syncPeer() {
 			// in sync
 			d.peerInSync = true
 			d.lock.Unlock()
+			log.Println("PEER:", "IN SYNC")
 			continue
 		}
 		d.lock.Unlock()
@@ -305,16 +308,19 @@ func (d *doer) syncPeer() {
 			payload, err := d.commitLog.Record(i + 1)
 			if err != nil {
 				sleep = true
+				log.Println("PEER:", err)
 				continue
 			}
 			err = d.peer.Prepare(payload)
 			if err != nil {
 				sleep = true
+				log.Println("PEER:", err)
 				continue
 			}
 			err = d.peer.Commit()
 			if err != nil {
 				sleep = true
+				log.Println("PEER:", err)
 				continue
 			}
 		}
