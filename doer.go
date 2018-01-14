@@ -266,7 +266,6 @@ func (d *doer) syncPeer() {
 		if d.peerInSync {
 			// already in sync
 			d.lock.Unlock()
-			log.Println("PEER: peer is in sync")
 			sleep = true
 			continue
 		}
