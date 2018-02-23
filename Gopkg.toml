@@ -23,12 +23,12 @@
 
 [[constraint]]
   name = "github.com/Preetam/lm2"
-  version = "2.0.0-pre2"
+  version = "v2"
 
 [[constraint]]
   name = "github.com/Preetam/lm2log"
-  version = "1.0.0"
+  version = "v1"
 
 [[constraint]]
   name = "github.com/Preetam/siesta"
-  version = "1.0.0"
+  version = "v1"
