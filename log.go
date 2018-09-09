@@ -26,6 +26,11 @@ func (err logError) Error() string {
 	return fmt.Sprintf("logError [%s-%d] (%s)", err.Type, err.StatusCode, err.Err)
 }
 
+// HTTPError represents an HTTP error that has an associated status code.
+type HTTPError interface {
+	StatusCode() int
+}
+
 type Service interface {
 	Validate(Operation) error
 	Apply(uint64, Operation) error
@@ -195,10 +200,14 @@ func (l *rigLog) Prepare(payload LogPayload) error {
 
 	err = l.service.Validate(payload.Op)
 	if err != nil {
+		statusCode := http.StatusBadRequest
+		if httpErr, ok := err.(HTTPError); ok {
+			statusCode = httpErr.StatusCode()
+		}
 		return logError{
 			Type:       "internal",
 			Err:        errors.New("invalid operation"),
-			StatusCode: http.StatusBadRequest,
+			StatusCode: statusCode,
 		}
 	}
 
@@ -269,10 +278,14 @@ func (l *rigLog) Commit() error {
 
 	err = l.service.Apply(committedVersion, operation)
 	if err != nil {
+		statusCode := http.StatusInternalServerError
+		if httpErr, ok := err.(HTTPError); ok {
+			statusCode = httpErr.StatusCode()
+		}
 		return logError{
 			Type:       "internal",
 			Err:        err,
-			StatusCode: http.StatusInternalServerError,
+			StatusCode: statusCode,
 		}
 	}
 
