@@ -4,8 +4,8 @@
 [[projects]]
   name = "github.com/Preetam/lm2"
   packages = ["."]
-  revision = "7f4de7685ecdd933c434d5474a8f00162d0d4176"
-  version = "v2.2.2"
+  revision = "9b26c2078c1d1ed0131fc77c3f8e8f4b0c0d121e"
+  version = "v2.2.5"
 
 [[projects]]
   name = "github.com/Preetam/lm2log"

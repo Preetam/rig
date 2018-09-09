@@ -113,8 +113,6 @@ type record struct {
 	Offset int64
 	Key    string
 	Value  string
-
-	lock sync.RWMutex
 }
 
 func generateLevel() int {
@@ -244,6 +242,12 @@ func NewCollection(file string, cacheSize int) (*Collection, error) {
 	c.fileHeader.LastCommit = int64(512)
 	c.f.Seek(0, 0)
 	err = binary.Write(c.f, binary.LittleEndian, c.fileHeader)
+	if err != nil {
+		c.f.Close()
+		c.wal.Close()
+		return nil, err
+	}
+	err = c.f.Truncate(c.LastCommit)
 	if err != nil {
 		c.f.Close()
 		c.wal.Close()
