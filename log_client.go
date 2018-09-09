@@ -27,8 +27,8 @@ func NewLogPayload(version uint64, op Operation) *LogPayload {
 
 // Operation represents a log operation.
 type Operation struct {
-	Method string          `json:"method"`
-	Data   json.RawMessage `json:"data"`
+	Method string `json:"method"`
+	Data   []byte `json:"data"`
 }
 
 // NewOperation returns a new Operation.
