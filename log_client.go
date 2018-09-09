@@ -1,7 +1,6 @@
 package rig
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -32,7 +31,7 @@ type Operation struct {
 }
 
 // NewOperation returns a new Operation.
-func NewOperation(method string, data json.RawMessage) Operation {
+func NewOperation(method string, data []byte) Operation {
 	return Operation{
 		Method: method,
 		Data:   data,
