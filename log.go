@@ -112,10 +112,20 @@ func (l *rigLog) Prepared() (LogPayload, error) {
 	operation := Operation{}
 	err = json.Unmarshal([]byte(preparedData), &operation)
 	if err != nil {
-		return p, logError{
-			Type:       "internal",
-			Err:        err,
-			StatusCode: http.StatusInternalServerError,
+		oldOperationStruct := struct {
+			Method string          `json:"method"`
+			Data   json.RawMessage `json:"data"`
+		}{}
+		err = json.Unmarshal([]byte(committedData), &oldOperationStruct)
+		if err == nil {
+			operation.Method = oldOperationStruct.Method
+			operation.Data = []byte(oldOperationStruct.Data)
+		} else {
+			return logError{
+				Type:       "internal",
+				Err:        err,
+				StatusCode: http.StatusInternalServerError,
+			}
 		}
 	}
 
