@@ -116,12 +116,12 @@ func (l *rigLog) Prepared() (LogPayload, error) {
 			Method string          `json:"method"`
 			Data   json.RawMessage `json:"data"`
 		}{}
-		err = json.Unmarshal([]byte(committedData), &oldOperationStruct)
+		err = json.Unmarshal([]byte(preparedData), &oldOperationStruct)
 		if err == nil {
 			operation.Method = oldOperationStruct.Method
 			operation.Data = []byte(oldOperationStruct.Data)
 		} else {
-			return logError{
+			return p, logError{
 				Type:       "internal",
 				Err:        err,
 				StatusCode: http.StatusInternalServerError,
@@ -172,10 +172,20 @@ func (l *rigLog) Committed() (LogPayload, error) {
 	operation := Operation{}
 	err = json.Unmarshal([]byte(committedData), &operation)
 	if err != nil {
-		return p, logError{
-			Type:       "internal",
-			Err:        err,
-			StatusCode: http.StatusInternalServerError,
+		oldOperationStruct := struct {
+			Method string          `json:"method"`
+			Data   json.RawMessage `json:"data"`
+		}{}
+		err = json.Unmarshal([]byte(committedData), &oldOperationStruct)
+		if err == nil {
+			operation.Method = oldOperationStruct.Method
+			operation.Data = []byte(oldOperationStruct.Data)
+		} else {
+			return p, logError{
+				Type:       "internal",
+				Err:        err,
+				StatusCode: http.StatusInternalServerError,
+			}
 		}
 	}
 
@@ -279,10 +289,20 @@ func (l *rigLog) Commit() error {
 	operation := Operation{}
 	err = json.Unmarshal([]byte(committedData), &operation)
 	if err != nil {
-		return logError{
-			Type:       "internal",
-			Err:        err,
-			StatusCode: http.StatusInternalServerError,
+		oldOperationStruct := struct {
+			Method string          `json:"method"`
+			Data   json.RawMessage `json:"data"`
+		}{}
+		err = json.Unmarshal([]byte(committedData), &oldOperationStruct)
+		if err == nil {
+			operation.Method = oldOperationStruct.Method
+			operation.Data = []byte(oldOperationStruct.Data)
+		} else {
+			return logError{
+				Type:       "internal",
+				Err:        err,
+				StatusCode: http.StatusInternalServerError,
+			}
 		}
 	}
 
@@ -336,10 +356,20 @@ func (l *rigLog) Record(version uint64) (LogPayload, error) {
 	operation := Operation{}
 	err = json.Unmarshal([]byte(committedData), &operation)
 	if err != nil {
-		return p, logError{
-			Type:       "internal",
-			Err:        err,
-			StatusCode: http.StatusInternalServerError,
+		oldOperationStruct := struct {
+			Method string          `json:"method"`
+			Data   json.RawMessage `json:"data"`
+		}{}
+		err = json.Unmarshal([]byte(committedData), &oldOperationStruct)
+		if err == nil {
+			operation.Method = oldOperationStruct.Method
+			operation.Data = []byte(oldOperationStruct.Data)
+		} else {
+			return p, logError{
+				Type:       "internal",
+				Err:        err,
+				StatusCode: http.StatusInternalServerError,
+			}
 		}
 	}
 
@@ -478,9 +508,19 @@ func (l *rigLog) Handler() http.Handler {
 		operation := Operation{}
 		err = json.Unmarshal([]byte(data), &operation)
 		if err != nil {
-			requestData.ResponseError = err.Error()
-			requestData.StatusCode = http.StatusInternalServerError
-			return
+			oldOperationStruct := struct {
+				Method string          `json:"method"`
+				Data   json.RawMessage `json:"data"`
+			}{}
+			err = json.Unmarshal([]byte(data), &oldOperationStruct)
+			if err == nil {
+				operation.Method = oldOperationStruct.Method
+				operation.Data = []byte(oldOperationStruct.Data)
+			} else {
+				requestData.ResponseError = err.Error()
+				requestData.StatusCode = http.StatusInternalServerError
+				return
+			}
 		}
 
 		payload := LogPayload{
