@@ -1,0 +1,9 @@
+version: 2
+jobs:
+  build:
+    working_directory: /go/src/github.com/Preetam/rig
+    docker:
+      - image: golang:1.11
+    steps:
+      - checkout
+      - run: go test -v -race
