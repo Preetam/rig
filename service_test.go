@@ -49,11 +49,12 @@ func (o *testObjectStore) PutObject(name string, data io.ReadSeeker, size int64)
 	return nil
 }
 
-func Test1(t *testing.T) {
+func TestSimple(t *testing.T) {
 	rs, err := NewRiggedService(&testService{}, NewFileObjectStore("/tmp/bucket"), "my_service")
 	if err != nil {
 		t.Fatal(err)
 	}
+	rs.testSleep = true
 	t.Log(rs.Recover())
 	t.Log(rs.service)
 	rs.Apply(Operation{}, false)
